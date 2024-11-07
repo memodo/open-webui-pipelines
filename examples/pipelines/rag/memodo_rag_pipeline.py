@@ -30,8 +30,19 @@ class Pipeline:
         COLLECTION_NAME: str
         MODEL_NAME: str
 
-    class Retreive:
-        def __init__(self, model, host, port, collection_name, openai_api_key):
+    def __init__(self):
+        self.name = "Memodo RAG Pipeline"
+        self.valves = self.Valves(
+            **{
+                "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY", ""),
+                "VECTOR_DB_HOST": os.getenv("VECTOR_DB_HOST", "localhost"),
+                "VECTOR_DB_PORT": os.getenv("VECTOR_DB_PORT", "8000"),
+                "COLLECTION_NAME": os.getenv("COLLECTION_NAME", "test"),
+                "MODEL_NAME": os.getenv("MODEL_NAME", "llama3.2:3b")
+            }
+        )
+
+    def retriever(self, model, host, port, collection_name, openai_api_key):
             self.printWithEmphasis(f"Using model: {model}")
 
             if model.startswith("gpt"):
@@ -49,98 +60,85 @@ class Pipeline:
             logging.basicConfig()
             logging.getLogger("langchain.retrievers.multi_query").setLevel(logging.INFO)
             
-        def printWithEmphasis(self, toBePrinted):
-            print("**********************************************")
-            print(f"{toBePrinted}")
-            print("**********************************************")
-        
-        def lineListOutputParser(self, text: str) -> List[str]:
-            lines = text.strip().split("\n")
-            self.printWithEmphasis(f"Multi-query questions: {lines}")
-            return lines  
+    def printWithEmphasis(self, toBePrinted):
+        print("**********************************************")
+        print(f"{toBePrinted}")
+        print("**********************************************")
+    
+    def lineListOutputParser(self, text: str) -> List[str]:
+        lines = text.strip().split("\n")
+        self.printWithEmphasis(f"Multi-query questions: {lines}")
+        return lines  
 
-        def query_db(self, questions):
-            results = self.vector_db_documents.query(
-                query_texts=questions,
-                n_results=10
-            )
-            self.printWithEmphasis(f"Raw Results: {results}")
-            self.printWithEmphasis(f"Result Documents: {results['documents']}")
-            return results["documents"]
-
-        def preview_results(self, results):
-            self.printWithEmphasis(f"Preview Results: {results}")
-            return results
-        
-        def do_rag(self, user_question):
-            multiquery_template = """
-            You are an AI language model assistant.
-
-            Your task is to generate 3 different versions of the given user question to retrieve relevant documents from a vector database.
-
-            By generating multiple perspectives on the user question, your goal is to help the user overcome some of the limitations of distance-based similarity search.
-
-            Provide these alternative questions separated by newlines.
-
-            Original question: {question}
-            """
-            
-            rag_template = """
-            Answer the question based on the context below. If you can't answer the question, say "I don't know." Do not make up new information.
-
-            Context: {context}
-
-            Question: {question}
-            """
-
-            multiquery_prompt = PromptTemplate.from_template(multiquery_template)
-            rag_prompt = PromptTemplate.from_template(rag_template)
-
-            parser = StrOutputParser()
-
-            chain = (
-                {
-                    "question": lambda x: itemgetter(x["question"])
-                }
-                | multiquery_prompt
-                | self.model_instance
-                | self.lineListOutputParser
-                | {
-                    "context": lambda x: self.query_db(x),
-                    "question": lambda _: user_question
-                }
-                | rag_prompt
-                | self.model_instance
-                | {
-                    "content": lambda x: self.preview_results(x)
-                }
-                | parser
-            )
-
-            try:
-                self.printWithEmphasis(f"User's question: {user_question}")
-                result = chain.invoke({"question": user_question})
-                self.printWithEmphasis(f"Result: {result}")
-            except Exception as e:
-                self.printWithEmphasis(e)
-
-    def __init__(self):
-        self.retreive = None
-        self.name = "Memodo RAG Pipeline"
-        self.valves = self.Valves(
-            **{
-                "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY", ""),
-                "VECTOR_DB_HOST": os.getenv("VECTOR_DB_HOST", "localhost"),
-                "VECTOR_DB_PORT": os.getenv("VECTOR_DB_PORT", "8000"),
-                "COLLECTION_NAME": os.getenv("COLLECTION_NAME", "test"),
-                "MODEL_NAME": os.getenv("MODEL_NAME", "llama3.2:3b")
-            }
+    def query_db(self, questions):
+        results = self.vector_db_documents.query(
+            query_texts=questions,
+            n_results=10
         )
+        self.printWithEmphasis(f"Raw Results: {results}")
+        self.printWithEmphasis(f"Result Documents: {results['documents']}")
+        return results["documents"]
+
+    def preview_results(self, results):
+        self.printWithEmphasis(f"Preview Results: {results}")
+        return results
+    
+    def do_rag(self, user_question):
+        multiquery_template = """
+        You are an AI language model assistant.
+
+        Your task is to generate 3 different versions of the given user question to retrieve relevant documents from a vector database.
+
+        By generating multiple perspectives on the user question, your goal is to help the user overcome some of the limitations of distance-based similarity search.
+
+        Provide these alternative questions separated by newlines.
+
+        Original question: {question}
+        """
+        
+        rag_template = """
+        Answer the question based on the context below. If you can't answer the question, say "I don't know." Do not make up new information.
+
+        Context: {context}
+
+        Question: {question}
+        """
+
+        multiquery_prompt = PromptTemplate.from_template(multiquery_template)
+        rag_prompt = PromptTemplate.from_template(rag_template)
+
+        parser = StrOutputParser()
+
+        chain = (
+            {
+                "question": lambda x: itemgetter(x["question"])
+            }
+            | multiquery_prompt
+            | self.model_instance
+            | self.lineListOutputParser
+            | {
+                "context": lambda x: self.query_db(x),
+                "question": lambda _: user_question
+            }
+            | rag_prompt
+            | self.model_instance
+            | {
+                "content": lambda x: self.preview_results(x)
+            }
+            | parser
+        )
+
+        try:
+            self.printWithEmphasis(f"User's question: {user_question}")
+            result = chain.invoke({"question": user_question})
+            self.printWithEmphasis(f"Result: {result}")
+        except Exception as e:
+            self.printWithEmphasis(e)
 
     async def on_startup(self):
         # This function is called when the server is started.
         print(f"on_startup:{__name__}")
-        self.retreive = self.Retreive(self.valves.MODEL_NAME, self.valves.VECTOR_DB_HOST, self.valves.VECTOR_DB_PORT, self.valves.COLLECTION_NAME, self.valves.OPENAI_API_KEY)
+        self.retriever(self.valves.MODEL_NAME, self.valves.VECTOR_DB_HOST, self.valves.VECTOR_DB_PORT, self.valves.COLLECTION_NAME, self.valves.OPENAI_API_KEY)
         
 
     async def on_shutdown(self):
@@ -161,6 +159,6 @@ class Pipeline:
             print("######################################")
 
         try:
-            return self.retreive.do_rag(user_message)
+            return self.do_rag(user_message)
         except Exception as e:
             return f"Error: {e}"
