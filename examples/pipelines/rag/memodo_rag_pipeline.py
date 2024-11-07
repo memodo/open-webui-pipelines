@@ -5,15 +5,15 @@ date: 2024-11-06
 version: 1.0
 license: MIT
 description: A pipeline for retrieving relevant information from a knowledge base using the LangChain library.
-requirements: langchain
+requirements: langchain, langchain-openai, langchain-community, langchain-core
 """
 
 import os
 import chromadb
 import logging
 
-from dotenv import load_dotenv
 from typing import Generator, Iterator, List, Union
+from operator import itemgetter
 from pydantic import BaseModel, SecretStr
 from langchain_openai.chat_models import ChatOpenAI
 from langchain_openai.embeddings import OpenAIEmbeddings
@@ -21,10 +21,10 @@ from langchain_community.llms import Ollama
 from langchain_community.embeddings import OllamaEmbeddings
 from langchain_core.output_parsers import StrOutputParser
 from langchain.prompts import PromptTemplate
-from operator import itemgetter
 
 class Pipeline:
     class Valves(BaseModel):
+        OPENAI_API_KEY: str
         VECTOR_DB_HOST: str
         VECTOR_DB_PORT: str
         COLLECTION_NAME: str
@@ -49,7 +49,7 @@ class Pipeline:
             logging.basicConfig()
             logging.getLogger("langchain.retrievers.multi_query").setLevel(logging.INFO)
             
-        def printWithEmphasis(toBePrinted):
+        def printWithEmphasis(self, toBePrinted):
             print("**********************************************")
             print(f"{toBePrinted}")
             print("**********************************************")
