@@ -5,7 +5,7 @@ date: 2024-11-06
 version: 1.0
 license: MIT
 description: A pipeline for retrieving relevant information from a knowledge base using the LangChain library.
-requirements: langchain, langchain-openai, langchain-community, langchain-core
+requirements: chromadb, pydantic, langchain, langchain-openai, langchain-community, langchain-core
 """
 
 import os
@@ -34,7 +34,7 @@ class Pipeline:
         self.name = "Memodo RAG Pipeline"
         self.valves = self.Valves(
             **{
-                "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY", ""),
+                "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY", "test"),
                 "VECTOR_DB_HOST": os.getenv("VECTOR_DB_HOST", "localhost"),
                 "VECTOR_DB_PORT": os.getenv("VECTOR_DB_PORT", "8000"),
                 "COLLECTION_NAME": os.getenv("COLLECTION_NAME", "test"),
@@ -42,23 +42,39 @@ class Pipeline:
             }
         )
 
+    async def on_startup(self):      
+        # This function is called when the server is started.
+        print(f"on_startup:{__name__}")       
+        self.retriever(
+            self.valves.MODEL_NAME, 
+            self.valves.VECTOR_DB_HOST, 
+            self.valves.VECTOR_DB_PORT, 
+            self.valves.COLLECTION_NAME, 
+            self.valves.OPENAI_API_KEY
+        ) 
+
+    async def on_shutdown(self):
+        # This function is called when the server is stopped.
+        print(f"on_shutdown:{__name__}")
+        pass
+
     def retriever(self, model, host, port, collection_name, openai_api_key):
-            self.printWithEmphasis(f"Using model: {model}")
+        self.printWithEmphasis(f"Using model: {model}")
 
-            if model.startswith("gpt"):
-                self.model_instance = ChatOpenAI(api_key=SecretStr(openai_api_key), model=model)
-                embeddings = OpenAIEmbeddings()
-            else:
-                self.model_instance = Ollama(model=model)
-                embeddings = OllamaEmbeddings(model=model)
+        if model.startswith("gpt"):
+            self.model_instance = ChatOpenAI(api_key=SecretStr(openai_api_key), model=model)
+            embeddings = OpenAIEmbeddings()
+        else:
+            self.model_instance = Ollama(model=model)
+            embeddings = OllamaEmbeddings(model=model)
 
-            client = chromadb.HttpClient(host, port)
-            self.vector_db_documents = client.get_collection(
-                    name=collection_name
-                )
+        client = chromadb.HttpClient(host, port)
+        self.vector_db_documents = client.get_collection(
+                name=collection_name
+            )
 
-            logging.basicConfig()
-            logging.getLogger("langchain.retrievers.multi_query").setLevel(logging.INFO)
+        logging.basicConfig()
+        logging.getLogger("langchain.retrievers.multi_query").setLevel(logging.INFO)
             
     def printWithEmphasis(self, toBePrinted):
         print("**********************************************")
@@ -134,17 +150,6 @@ class Pipeline:
             self.printWithEmphasis(f"Result: {result}")
         except Exception as e:
             self.printWithEmphasis(e)
-
-    async def on_startup(self):
-        # This function is called when the server is started.
-        print(f"on_startup:{__name__}")
-        self.retriever(self.valves.MODEL_NAME, self.valves.VECTOR_DB_HOST, self.valves.VECTOR_DB_PORT, self.valves.COLLECTION_NAME, self.valves.OPENAI_API_KEY)
-        
-
-    async def on_shutdown(self):
-        # This function is called when the server is stopped.
-        print(f"on_shutdown:{__name__}")
-        pass
 
     def pipe(
         self, user_message: str, model_id: str, messages: List[dict], body: dict
