@@ -20,6 +20,10 @@ from langchain_community.llms import Ollama
 from langchain_community.embeddings import OllamaEmbeddings
 from langchain_core.output_parsers import StrOutputParser
 from langchain.prompts import PromptTemplate
+from chromadb.config import Settings
+from dotenv import load_dotenv
+
+load_dotenv('./../.env')
 
 class Pipeline:
     class Valves(BaseModel):
@@ -34,7 +38,7 @@ class Pipeline:
         self.valves = self.Valves(
             **{
                 "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY", "test"),
-                "VECTOR_DB_HOST": os.getenv("VECTOR_DB_HOST", "open-webui-chromadb"),
+                "VECTOR_DB_HOST": os.getenv("VECTOR_DB_HOST", "host.docker.internal"),
                 "VECTOR_DB_PORT": os.getenv("VECTOR_DB_PORT", "8000"),
                 "COLLECTION_NAME": os.getenv("COLLECTION_NAME", "test"),
                 "MODEL_NAME": os.getenv("MODEL_NAME", "llama3.2:3b")
@@ -53,14 +57,35 @@ class Pipeline:
     def retriever(self, model, host, port, collection_name, openai_api_key):
         self.printWithEmphasis(f"Using model: {model}")
 
+        self.printWithEmphasis(f"Using host: {host}")
+        self.printWithEmphasis(f"Using port: {port}")
+        self.printWithEmphasis(f"Using collection_name: {collection_name}")
+        self.printWithEmphasis(f"Using openai_api_key: {openai_api_key}")
+
         if model.startswith("gpt"):
             self.model_instance = ChatOpenAI(api_key=SecretStr(openai_api_key), model=model)
             embeddings = OpenAIEmbeddings()
         else:
             self.model_instance = Ollama(model=model)
-            embeddings = OllamaEmbeddings(model=model)
+            embeddings = OllamaEmbeddings(model=model, base_url=f"http://{host}:{port}")
 
-        client = chromadb.HttpClient(host, port)
+        self.printWithEmphasis(f"Using model instance: {self.model_instance}")
+        self.printWithEmphasis(f"Using embeddings: {embeddings}")
+
+        self.printWithEmphasis(f"Chroma Client: {chromadb}")
+        
+        client = chromadb.HttpClient(
+            host,
+            port,
+            settings=Settings(
+                chroma_client_auth_provider="chromadb.auth.token_authn.TokenAuthClientProvider",
+                chroma_client_auth_credentials=os.getenv("CHROMA_CLIENT_AUTH_CREDENTIALS"),
+                chroma_auth_token_transport_header=os.getenv("CHROMA_SERVER_AUTH_TOKEN_TRANSPORT_HEADER")
+            )
+        )
+
+        self.printWithEmphasis(f"Vector DB Client: {client}")
+
         self.vector_db_documents = client.get_collection(
                 name=collection_name
             )

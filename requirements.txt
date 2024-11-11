@@ -70,3 +70,6 @@ langchain
 langchain-openai
 langchain-community
 langchain-core
+
+# Misc
+python-dotenv
