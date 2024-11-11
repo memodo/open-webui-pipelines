@@ -5,7 +5,6 @@ date: 2024-11-06
 version: 1.0
 license: MIT
 description: A pipeline for retrieving relevant information from a knowledge base using the LangChain library.
-requirements: chromadb, pydantic, langchain, langchain-openai, langchain-community, langchain-core
 """
 
 import os
@@ -35,7 +34,7 @@ class Pipeline:
         self.valves = self.Valves(
             **{
                 "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY", "test"),
-                "VECTOR_DB_HOST": os.getenv("VECTOR_DB_HOST", "localhost"),
+                "VECTOR_DB_HOST": os.getenv("VECTOR_DB_HOST", "open-webui-chromadb"),
                 "VECTOR_DB_PORT": os.getenv("VECTOR_DB_PORT", "8000"),
                 "COLLECTION_NAME": os.getenv("COLLECTION_NAME", "test"),
                 "MODEL_NAME": os.getenv("MODEL_NAME", "llama3.2:3b")
@@ -44,14 +43,7 @@ class Pipeline:
 
     async def on_startup(self):      
         # This function is called when the server is started.
-        print(f"on_startup:{__name__}")       
-        self.retriever(
-            self.valves.MODEL_NAME, 
-            self.valves.VECTOR_DB_HOST, 
-            self.valves.VECTOR_DB_PORT, 
-            self.valves.COLLECTION_NAME, 
-            self.valves.OPENAI_API_KEY
-        ) 
+        print(f"on_startup:{__name__}")
 
     async def on_shutdown(self):
         # This function is called when the server is stopped.
@@ -164,6 +156,13 @@ class Pipeline:
             print("######################################")
 
         try:
+            self.retriever(
+                self.valves.MODEL_NAME, 
+                self.valves.VECTOR_DB_HOST, 
+                self.valves.VECTOR_DB_PORT, 
+                self.valves.COLLECTION_NAME, 
+                self.valves.OPENAI_API_KEY
+            ) 
             return self.do_rag(user_message)
         except Exception as e:
             return f"Error: {e}"
